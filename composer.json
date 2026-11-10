@@ -1,0 +1,60 @@
+{
+    "name": "nfgarching/share",
+    "description": "Dateien über das Download-Portal (laravel-bootstrap-download-app) bereitstellen statt als E-Mail-Anhang.",
+    "keywords": [
+        "laravel",
+        "livewire",
+        "download",
+        "portal",
+        "secure file transfer"
+    ],
+    "homepage": "https://github.com/nfgarching/laravel-bootstrap-share",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Norbert Fröhler",
+            "email": "norbert.froehler@gmail.com",
+            "role": "Owner"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "guzzlehttp/guzzle": "^7.8",
+        "illuminate/http": "^13.0",
+        "illuminate/support": "^13.0",
+        "livewire/livewire": "^4.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "phpunit/phpunit": "^12.0"
+    },
+    "suggest": {
+        "nfgarching/core": "Modal und Navbar-Eintrag werden über die Registries des Core eingebunden",
+        "nfgarching/mailer": "Nach der Freigabe eine E-Mail mit dem Link im Mailer-Modal vorbereiten"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nfgarching\\Share\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nfgarching\\Share\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Nfgarching\\Share\\ShareServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    }
+}
