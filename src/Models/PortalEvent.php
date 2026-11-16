@@ -23,6 +23,7 @@ class PortalEvent extends Model
         'link.locked' => 'Link gesperrt (zu viele Fehlversuche)',
         'file.downloaded' => 'Datei heruntergeladen',
         'download.limit_reached' => 'Abruflimit erreicht',
+        'account.notified' => 'Kontoinhaber per E-Mail hingewiesen',
     ];
 
     protected $table = 'share_events';
