@@ -62,6 +62,14 @@ class ShareComposer extends Component
 
     public ?string $error = null;
 
+    /** Zusätzlich Unterlagen anfordern (Upload-Link je Empfänger) */
+    public bool $requestUpload = false;
+
+    /** Was hochgeladen werden soll, z. B. „Lohnabrechnungen 2025“ */
+    public string $uploadSubject = '';
+
+    public int $uploadMaxFiles = 10;
+
     /** Ergebnis nach der Freigabe (Modal bleibt offen, damit Link und Passwort sichtbar sind) */
     #[Locked]
     public ?array $result = null;
@@ -83,12 +91,29 @@ class ShareComposer extends Component
         $this->reference = (string) ($options['reference'] ?? '');
         $this->password = (bool) ($options['password'] ?? config('nfshare.defaults.password', true));
         $this->maxDownloads = (int) ($options['max_downloads'] ?? config('nfshare.defaults.max_downloads', 5));
+        $this->requestUpload = (bool) ($options['request_upload'] ?? false);
+        $this->uploadSubject = (string) ($options['upload_subject'] ?? '');
+        $this->uploadMaxFiles = max(1, min(20, (int) ($options['upload_max_files'] ?? config('nfshare.uploads.max_files', 10))));
 
         $days = (int) ($options['expires_days'] ?? config('nfshare.defaults.expires_days', 14));
         $this->expiresAt = now()->addDays(max(1, min($days, 90)))->toDateString();
 
         $max = (int) config('nfshare.files.max_files', 20);
         $rejected = 0;
+
+        // Dateien der Dateiverwaltung (nfgarching/files) per ID: Pfad aus der
+        // Datenbank, daher ohne Prüfung der freigegebenen Verzeichnisse
+        foreach (array_slice((array) ($options['file_ids'] ?? []), 0, $max) as $fileId) {
+            $checked = FileGuard::fromFilesPackage((int) $fileId);
+
+            if ($checked === null) {
+                $rejected++;
+
+                continue;
+            }
+
+            $this->files[] = [...$checked, 'active' => true];
+        }
 
         foreach (array_slice((array) ($options['files'] ?? []), 0, $max) as $file) {
             $checked = is_array($file) ? FileGuard::check($file) : null;
@@ -214,7 +239,7 @@ class ShareComposer extends Component
         }
 
         $this->validate([
-            'subject' => ['required', 'string', 'max:200'],
+            'subject' => [$this->requestUpload && ! $this->hasActiveFiles() ? 'nullable' : 'required', 'string', 'max:200'],
             'message' => ['nullable', 'string', 'max:5000'],
             'reference' => ['nullable', 'string', 'max:100'],
             'expiresAt' => ['required', 'date', 'after:today', 'before_or_equal:'.now()->addDays(90)->toDateString()],
@@ -230,73 +255,127 @@ class ShareComposer extends Component
             'expiresAt.before_or_equal' => 'Höchstens 90 Tage.',
         ]);
 
+        if ($this->requestUpload) {
+            $this->validate([
+                'uploadSubject' => ['required', 'string', 'max:200'],
+                'uploadMaxFiles' => ['required', 'integer', 'min:1', 'max:20'],
+            ], [
+                'uploadSubject.required' => 'Bitte angeben, welche Unterlagen angefordert werden.',
+            ]);
+        }
+
         $files = array_values(array_filter($this->files, fn ($file) => $file['active']));
 
-        if ($files === []) {
-            $this->addError('files', 'Bitte mindestens eine Datei auswählen.');
+        if ($files === [] && ! $this->requestUpload) {
+            $this->addError('files', 'Bitte mindestens eine Datei auswählen oder Unterlagen anfordern.');
 
             return;
         }
 
         // Dateien erneut prüfen: zwischen Öffnen und Freigabe könnten sie verschwunden sein
-        $files = array_values(array_filter(array_map(fn ($file) => FileGuard::check($file), $files)));
+        $checked = array_values(array_filter(array_map(
+            fn ($file) => isset($file['file_id']) ? FileGuard::fromFilesPackage((int) $file['file_id']) : FileGuard::check($file),
+            $files,
+        )));
 
-        if ($files === []) {
+        if ($files !== [] && $checked === []) {
             $this->addError('files', 'Die ausgewählten Dateien sind nicht mehr vorhanden.');
 
             return;
         }
 
+        $expiresAt = Carbon::parse($this->expiresAt)->endOfDay();
+        $shipment = null;
+        $links = [];
+        $uploadLinks = [];
+
         try {
-            $result = $service->share([
-                'context' => $this->context,
-                'reference' => $this->reference ?: null,
-                'subject' => $this->subject,
-                'message' => $this->message ?: null,
-                // Ende des gewählten Tages in der Zeitzone der Anwendung
-                'expires_at' => Carbon::parse($this->expiresAt)->endOfDay(),
-                'max_downloads' => $this->maxDownloads,
-                'recipients' => $this->recipients,
-                'files' => $files,
-            ], auth()->id());
+            if ($checked !== []) {
+                $result = $service->share([
+                    'context' => $this->context,
+                    'reference' => $this->reference ?: null,
+                    'subject' => $this->subject,
+                    'message' => $this->message ?: null,
+                    // Ende des gewählten Tages in der Zeitzone der Anwendung
+                    'expires_at' => $expiresAt,
+                    'max_downloads' => $this->maxDownloads,
+                    'recipients' => $this->recipients,
+                    'files' => $checked,
+                ], auth()->id());
+
+                $shipment = $result->shipment;
+
+                foreach ($shipment->recipients as $recipient) {
+                    $links[$recipient->email] = ['recipient' => $recipient, ...($result->links[$recipient->id] ?? [])];
+                }
+            }
+
+            if ($this->requestUpload) {
+                foreach ($this->recipients as $recipient) {
+                    $uploadLinks[$recipient['email']] = $service->requestUpload([
+                        'context' => $this->context,
+                        'reference' => $this->reference ?: null,
+                        'subject' => $this->uploadSubject,
+                        'message' => $this->message ?: null,
+                        'email' => $recipient['email'],
+                        'name' => $recipient['name'],
+                        'expires_at' => $expiresAt,
+                        'max_files' => $this->uploadMaxFiles,
+                    ], auth()->id(), $shipment);
+                }
+            }
         } catch (PortalException $e) {
             report($e);
-            $this->error = $e->userMessage();
+            $this->error = $e->userMessage().($shipment ? ' Die Dateien wurden bereits bereitgestellt; die Anforderung bitte erneut anlegen.' : '');
 
             return;
         } catch (Throwable $e) {
             report($e);
-            $this->error = 'Die Freigabe ist fehlgeschlagen: '.$e->getMessage();
+            $this->error = 'Der Vorgang ist fehlgeschlagen: '.$e->getMessage();
 
             return;
         }
 
-        $shipment = $result->shipment;
+        $tz = config('app.timezone');
 
         $this->result = [
-            'id' => $shipment->id,
-            'subject' => $shipment->subject,
-            'expires' => $shipment->expires_at?->timezone(config('app.timezone'))->format('d.m.Y H:i'),
+            'id' => $shipment?->id,
+            'subject' => $shipment ? $shipment->subject : $this->uploadSubject,
+            'expires' => ($shipment?->expires_at ?? $expiresAt)->timezone($tz)->format('d.m.Y H:i'),
             'stored' => (bool) config('nfshare.store_secrets', true),
-            'recipients' => $shipment->recipients->map(function ($recipient) use ($result, $shipment) {
-                $link = $result->links[$recipient->id] ?? null;
+            'recipients' => collect($this->recipients)->map(function ($r) use ($links, $uploadLinks, $shipment) {
+                $link = $links[$r['email']] ?? null;
+                $upload = $uploadLinks[$r['email']] ?? null;
+
+                $mail = match (true) {
+                    $shipment && $link && isset($link['url']) => MailText::for($shipment, $link['recipient'], $link['url'], $upload),
+                    $upload !== null => MailText::forRequest($upload['request'], $upload['url']),
+                    default => null,
+                };
 
                 return [
-                    'email' => $recipient->email,
-                    'name' => $recipient->name,
+                    'email' => $r['email'],
+                    'name' => $r['name'],
                     'url' => $link['url'] ?? null,
                     'password' => $link['password'] ?? null,
-                    'mail' => $link ? [
+                    'upload_url' => $upload['url'] ?? null,
+                    'upload_password' => $upload['password'] ?? null,
+                    'mail' => $mail ? [
                         'context' => $this->context,
-                        'to' => [['email' => $recipient->email, 'name' => $recipient->name]],
+                        'to' => [['email' => $r['email'], 'name' => $r['name']]],
                         'links' => false,
-                        ...MailText::for($shipment, $recipient, $link['url']),
+                        ...$mail,
                     ] : null,
                 ];
             })->values()->all(),
         ];
 
-        $this->dispatch('nfshare-sent', id: $shipment->id);
+        $this->dispatch('nfshare-sent', id: $shipment?->id);
+    }
+
+    private function hasActiveFiles(): bool
+    {
+        return collect($this->files)->contains('active', true);
     }
 
     private function authorizeShare(array $context): void

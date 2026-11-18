@@ -11,6 +11,7 @@ use Nfgarching\Share\Events\ShipmentReleased;
 use Nfgarching\Share\Models\File;
 use Nfgarching\Share\Models\Recipient;
 use Nfgarching\Share\Models\Shipment;
+use Nfgarching\Share\Models\UploadRequest;
 use RuntimeException;
 use Throwable;
 
@@ -232,6 +233,67 @@ class ShareService
                 report($cleanup);
             }
         }
+    }
+
+    // ------------------------------------------------------------------ Rückkanal
+
+    /**
+     * Unterlagen anfordern: persönlicher Upload-Link an eine Adresse.
+     *
+     * @param  array{context?: array, reference?: ?string, subject: string, message?: ?string, email: string, name?: ?string, password?: bool, expires_at?: mixed, max_files?: ?int}  $data
+     * @return array{request: UploadRequest, url: string, password: ?string}
+     *
+     * @throws PortalException|RuntimeException
+     */
+    public function requestUpload(array $data, ?int $userId = null, ?Shipment $shipment = null): array
+    {
+        $context = (array) ($data['context'] ?? []);
+        $expiresAt = self::capExpiry(isset($data['expires_at'])
+            ? Carbon::parse($data['expires_at'])
+            : now()->addDays((int) config('nfshare.uploads.expires_days', 14)));
+
+        $remote = $this->client->createUploadRequest([
+            'reference' => $data['reference'] ?? null,
+            'subject' => $data['subject'],
+            'message' => $data['message'] ?? null,
+            'email' => strtolower(trim($data['email'])),
+            'name' => $data['name'] ?? null,
+            'password' => (bool) ($data['password'] ?? config('nfshare.uploads.password_default', false)),
+            'expires_at' => $expiresAt->toIso8601String(),
+            'max_files' => (int) ($data['max_files'] ?? config('nfshare.uploads.max_files', 10)),
+        ]);
+
+        $store = (bool) config('nfshare.store_secrets', true);
+
+        $request = UploadRequest::create([
+            'portal_id' => $remote['id'],
+            'share_shipment_id' => $shipment?->id,
+            'user_id' => $userId,
+            'context' => $context ?: null,
+            'context_key' => Shipment::contextKey($context),
+            'reference' => $data['reference'] ?? null,
+            'subject' => $data['subject'],
+            'message' => $data['message'] ?? null,
+            'email' => strtolower(trim($data['email'])),
+            'name' => $data['name'] ?? null,
+            'url' => $store ? $remote['url'] : null,
+            'password' => $store ? ($remote['password'] ?? null) : null,
+            'status' => 'open',
+            'expires_at' => isset($remote['expires_at']) ? Carbon::parse($remote['expires_at']) : $expiresAt,
+        ]);
+
+        return ['request' => $request, 'url' => $remote['url'], 'password' => $remote['password'] ?? null];
+    }
+
+    public function closeUploadRequest(UploadRequest $request): UploadRequest
+    {
+        if ($request->portal_id !== null) {
+            $this->client->closeUploadRequest($request->portal_id);
+        }
+
+        $request->forceFill(['status' => 'closed'])->save();
+
+        return $request;
     }
 
     // ------------------------------------------------------------------ Verwaltung

@@ -87,6 +87,41 @@ return [
         'subject' => 'Dokumente zum Abruf: :subject',
         'body' => "Guten Tag:name,\n\nüber unser Dokumentenportal stelle ich Ihnen folgende Unterlagen bereit:\n\n:files\n\nAbruf: :url\nAbrufbar bis: :expires\n:password_hint\nDer Download startet erst, wenn Sie auf der Seite auf „Herunterladen“ klicken.",
         'password_hint' => "\nDas Passwort zum Abruf erhalten Sie gesondert.\n",
+        // Wird angehängt, wenn zusätzlich Unterlagen angefordert werden (:upload_url, :upload_subject, :upload_expires)
+        'upload' => "\nBitte laden Sie außerdem folgende Unterlagen hoch – :upload_subject:\n:upload_url\n(möglich bis :upload_expires)\n",
+        // Nur Anforderung, ohne bereitgestellte Dateien
+        'request_subject' => 'Bitte um Unterlagen: :subject',
+        'request_body' => "Guten Tag:name,\n\nfür die weitere Bearbeitung benötige ich von Ihnen folgende Unterlagen – :upload_subject.\n\nBitte laden Sie diese über unser Dokumentenportal hoch:\n:upload_url\n\nDas Hochladen ist bis :upload_expires möglich. Sie erhalten eine Eingangsbestätigung per E-Mail.",
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rückkanal: Unterlagen anfordern und abholen (php artisan share:fetch-uploads)
+    |--------------------------------------------------------------------------
+    | key_path: Schlüsselpaar für die Versiegelung (php artisan share:keygen).
+    |           Der private Schlüssel bleibt hier; das Portal kennt nur den
+    |           öffentlichen. Geht die Datei verloren, sind noch nicht abgeholte
+    |           Uploads unlesbar – also mitsichern.
+    | disk/directory: Ablage der entschlüsselten Dateien ({Y}, {m}, {d} werden ersetzt).
+    | files: Mit nfgarching/files werden Uploads stattdessen als Dateien im
+    |        Posteingang angelegt (File::storeUpload + Ereignis NewFiles).
+    | scan_command: Virenprüfung vor der Ablage, z. B. "clamdscan --no-summary --fdpass {file}".
+    |        Exit 0 = sauber, 1 = Fund (Quarantäne), sonst Fehler (später erneut).
+    | password_default: Upload-Links mit Passwort vorbelegen. Ein Upload-Link gibt
+    |        nichts preis außer Betreff und Hinweis; daher standardmäßig ohne.
+    */
+    'uploads' => [
+        'key_path' => env('NFSHARE_KEY_PATH', storage_path('app/nfshare/upload.key')),
+        'disk' => env('NFSHARE_UPLOAD_DISK', 'local'),
+        'directory' => env('NFSHARE_UPLOAD_DIRECTORY', 'nfshare/eingang/{Y}/{m}'),
+        'quarantine_directory' => 'nfshare/quarantaene',
+        'files' => (bool) env('NFSHARE_UPLOADS_TO_FILES', true),
+        'scan_command' => env('NFSHARE_SCAN_COMMAND'),
+        'expires_days' => (int) env('NFSHARE_UPLOAD_REQUEST_DAYS', 14),
+        'max_files' => 10,
+        'password_default' => (bool) env('NFSHARE_UPLOAD_PASSWORD', false),
+        // Benachrichtigung über Eingänge ohne anfordernden Benutzer (freie Uploads aus dem Konto)
+        'notify_address' => env('NFSHARE_UPLOAD_NOTIFY'),
     ],
 
     // Optionaler Gate-Name, z. B. 'share-files' – sonst nur Login erforderlich

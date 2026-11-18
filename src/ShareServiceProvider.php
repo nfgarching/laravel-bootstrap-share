@@ -9,9 +9,12 @@ use Livewire\Livewire;
 use Nfgarching\Core\Modals\ModalRegistry;
 use Nfgarching\Share\Client\PortalClient;
 use Nfgarching\Share\Console\CheckCommand;
+use Nfgarching\Share\Console\FetchUploadsCommand;
+use Nfgarching\Share\Console\KeygenCommand;
 use Nfgarching\Share\Console\SyncCommand;
 use Nfgarching\Share\Livewire\ShareComposer;
 use Nfgarching\Share\Livewire\ShareList;
+use Nfgarching\Share\Support\KeyStore;
 
 class ShareServiceProvider extends ServiceProvider
 {
@@ -20,6 +23,8 @@ class ShareServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/share.php', 'nfshare');
 
         $this->app->bind(PortalClient::class, fn ($app) => PortalClient::fromConfig($app->make(HttpFactory::class)));
+
+        $this->app->bind(KeyStore::class, fn () => new KeyStore((string) config('nfshare.uploads.key_path')));
     }
 
     public function boot(): void
@@ -41,11 +46,12 @@ class ShareServiceProvider extends ServiceProvider
         if (config('nfshare.sync.schedule', true)) {
             $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
                 $schedule->command('share:sync')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
+                $schedule->command('share:fetch-uploads')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
             });
         }
 
         if ($this->app->runningInConsole()) {
-            $this->commands([CheckCommand::class, SyncCommand::class]);
+            $this->commands([CheckCommand::class, SyncCommand::class, KeygenCommand::class, FetchUploadsCommand::class]);
 
             $this->publishes([
                 __DIR__.'/../config/share.php' => config_path('nfshare.php'),

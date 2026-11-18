@@ -25,6 +25,15 @@ class CheckCommand extends Command
         $this->line('Schlüssel:   '.(config('nfshare.secret') ? 'gesetzt' : '<fehlt>'));
         $this->line('TLS-Prüfung: '.var_export(config('nfshare.verify'), true));
         $this->line('Links speichern: '.(config('nfshare.store_secrets') ? 'ja (verschlüsselt)' : 'nein'));
+
+        $keys = app(\Nfgarching\Share\Support\KeyStore::class);
+        $this->line('Rückkanal:   '.($keys->exists()
+            ? 'Schlüsselpaar vorhanden ('.$keys->fingerprint().')'
+            : 'kein Schlüsselpaar (php artisan share:keygen)'));
+        $this->line('Ablage:      '.(config('nfshare.uploads.files', true) && class_exists('Nfgarching\\Files\\Models\\File')
+            ? 'Posteingang der Dateiverwaltung (nfgarching/files)'
+            : config('nfshare.uploads.disk').':'.config('nfshare.uploads.directory')));
+        $this->line('Virenprüfung: '.(config('nfshare.uploads.scan_command') ?: 'aus'));
         $this->newLine();
 
         if (! $client->isConfigured()) {

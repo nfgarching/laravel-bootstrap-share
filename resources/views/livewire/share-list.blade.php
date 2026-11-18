@@ -163,4 +163,66 @@
 
         <div class="mt-2">{{ $shipments->links() }}</div>
     @endif
+
+    {{-- ------------------------------------------------------------ Rückkanal --}}
+    @if ($requests->isNotEmpty() || $uploads->isNotEmpty())
+        <h6 class="text-body-secondary text-uppercase small mt-4 mb-2">Angefordert und eingegangen</h6>
+
+        @if ($requests->isNotEmpty())
+            <ul class="list-group mb-2">
+                @foreach ($requests as $request)
+                    <li class="list-group-item d-flex flex-wrap align-items-center gap-2" wire:key="nfshare-req-{{ $request->id }}">
+                        <i class="bi bi-cloud-arrow-up text-body-secondary" aria-hidden="true"></i>
+                        <div class="flex-grow-1 text-break">
+                            <div class="fw-semibold">{{ $request->subject }}</div>
+                            <div class="small text-body-secondary">
+                                {{ $request->name ?: $request->email }}
+                                · {{ $request->uploads_count }} Eingang/Eingänge
+                                @if ($request->expires_at)
+                                    · bis {{ $request->expires_at->timezone(config('app.timezone'))->format('d.m.Y') }}
+                                @endif
+                            </div>
+                        </div>
+                        @if ($request->isOpen())
+                            <span class="badge text-bg-success">offen</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" wire:click="closeRequest({{ $request->id }})"
+                                wire:confirm="Anforderung beenden? Der Upload-Link wird ungültig.">Beenden</button>
+                        @else
+                            <span class="badge text-bg-secondary">beendet</span>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+
+        @if ($uploads->isNotEmpty())
+            <ul class="list-group">
+                @foreach ($uploads as $upload)
+                    <li class="list-group-item d-flex flex-wrap align-items-center gap-2" wire:key="nfshare-up-{{ $upload->id }}">
+                        <i class="bi bi-file-earmark-arrow-down text-body-secondary" aria-hidden="true"></i>
+                        <div class="flex-grow-1 text-break">
+                            <div>
+                                @if ($upload->status === \Nfgarching\Share\Models\Upload::STATUS_STORED)
+                                    <a href="{{ route('nfshare.upload.download', $upload) }}">{{ $upload->name }}</a>
+                                @else
+                                    {{ $upload->name }}
+                                @endif
+                                <span class="small text-body-secondary">({{ \Nfgarching\Share\Support\FileGuard::humanSize($upload->size) }})</span>
+                            </div>
+                            <div class="small text-body-secondary">
+                                {{ $upload->senderLabel() }}
+                                · {{ $upload->received_at?->timezone(config('app.timezone'))->format('d.m.Y H:i') }}
+                                @if ($upload->subject) · {{ $upload->subject }} @endif
+                            </div>
+                        </div>
+                        @if ($upload->status === \Nfgarching\Share\Models\Upload::STATUS_QUARANTINED)
+                            <span class="badge text-bg-danger">Quarantäne</span>
+                        @elseif ($upload->status === \Nfgarching\Share\Models\Upload::STATUS_FILED)
+                            <span class="badge text-bg-light border">in der Dateiverwaltung</span>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+    @endif
 </div>

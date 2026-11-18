@@ -128,6 +128,58 @@ class PortalClient
         return $this->send('GET', '/events', query: ['after' => $after, 'limit' => $limit])->json();
     }
 
+    // ------------------------------------------------------------------ Rückkanal
+
+    /** @return array{fingerprint: string} */
+    public function setUploadKey(string $publicKeyBase64): array
+    {
+        return $this->send('PUT', '/client/upload-key', json: ['public_key' => $publicKeyBase64])->json('data');
+    }
+
+    /**
+     * @param  array{reference?: ?string, subject: string, message?: ?string, email: string, name?: ?string, password?: bool, expires_at?: ?string, max_files?: ?int}  $payload
+     * @return array<string, mixed> mit url und password (nur hier)
+     */
+    public function createUploadRequest(array $payload): array
+    {
+        return $this->send('POST', '/upload-requests', json: $payload)->json('data');
+    }
+
+    /** @return array<string, mixed> */
+    public function getUploadRequest(string $id): array
+    {
+        return $this->send('GET', '/upload-requests/'.$this->id($id))->json('data');
+    }
+
+    /** @return array<string, mixed> */
+    public function closeUploadRequest(string $id): array
+    {
+        return $this->send('DELETE', '/upload-requests/'.$this->id($id))->json('data');
+    }
+
+    /** @return list<array<string, mixed>> noch nicht abgeholte Uploads */
+    public function uploads(int $limit = 50): array
+    {
+        return $this->send('GET', '/uploads', query: ['limit' => $limit])->json('data') ?? [];
+    }
+
+    /** Lädt den verschlüsselten Inhalt in eine Datei. */
+    public function downloadUpload(string $id, string $targetPath): void
+    {
+        $response = $this->send('GET', '/uploads/'.$this->id($id).'/content', sink: $targetPath, timeout: $this->uploadTimeout);
+
+        // Ohne echten Transport (z. B. Http::fake) landet der Inhalt nicht im Sink
+        if ((! is_file($targetPath) || filesize($targetPath) === 0) && $response->body() !== '') {
+            file_put_contents($targetPath, $response->body());
+        }
+    }
+
+    /** @return array<string, mixed> */
+    public function ackUpload(string $id): array
+    {
+        return $this->send('POST', '/uploads/'.$this->id($id).'/ack')->json('data');
+    }
+
     // ------------------------------------------------------------------ Transport
 
     /**
@@ -145,6 +197,7 @@ class PortalClient
         ?string $contentHash = null,
         array $headers = [],
         ?int $timeout = null,
+        ?string $sink = null,
     ): Response {
         if (! $this->isConfigured()) {
             throw new PortalException('Die Verbindung zum Portal ist nicht konfiguriert (NFSHARE_URL, NFSHARE_TOKEN, NFSHARE_SECRET).');
@@ -178,6 +231,10 @@ class PortalClient
 
         if ($method !== 'GET') {
             $request = $request->withBody($body, $contentType);
+        }
+
+        if ($sink !== null) {
+            $request = $request->sink($sink);
         }
 
         try {

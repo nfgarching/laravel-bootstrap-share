@@ -66,6 +66,45 @@ class FileGuard
         ];
     }
 
+    /**
+     * Datei aus nfgarching/files über ihre ID. Disk und Pfad stammen aus der
+     * Datenbank (nicht aus dem Browser), daher ohne Prüfung der Verzeichnisse.
+     *
+     * @return array{disk: string, path: string, name: string, size: int, file_id: int}|null
+     */
+    public static function fromFilesPackage(int $id): ?array
+    {
+        $class = 'Nfgarching\\Files\\Models\\File';
+
+        if ($id <= 0 || ! class_exists($class)) {
+            return null;
+        }
+
+        $file = $class::find($id);
+
+        if ($file === null || blank($file->disk) || blank($file->file)) {
+            return null;
+        }
+
+        try {
+            if (! Storage::disk($file->disk)->exists($file->file)) {
+                return null;
+            }
+
+            $size = (int) Storage::disk($file->disk)->size($file->file);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return [
+            'disk' => (string) $file->disk,
+            'path' => (string) $file->file,
+            'name' => mb_substr(basename(str_replace('\\', '/', (string) $file->name)), 0, 200) ?: basename((string) $file->file),
+            'size' => $size,
+            'file_id' => (int) $file->id,
+        ];
+    }
+
     public static function humanSize(int $bytes): string
     {
         return $bytes >= 1048576

@@ -11,6 +11,8 @@ use Livewire\WithPagination;
 use Nfgarching\Share\Client\PortalException;
 use Nfgarching\Share\Models\Recipient;
 use Nfgarching\Share\Models\Shipment;
+use Nfgarching\Share\Models\Upload;
+use Nfgarching\Share\Models\UploadRequest;
 use Nfgarching\Share\Services\ShareService;
 use Throwable;
 
@@ -101,6 +103,26 @@ class ShareList extends Component
         $this->run($recipient->share_shipment_id, fn () => $service->unlock($recipient), 'Empfänger wieder freigegeben.');
     }
 
+    public function closeRequest(int $id, ShareService $service): void
+    {
+        $this->notice = $this->error = null;
+
+        $request = UploadRequest::findOrFail($id);
+        $this->authorizeList();
+
+        if ($this->context !== []) {
+            abort_unless($request->context_key === Shipment::contextKey($this->context), 404);
+        }
+
+        try {
+            $service->closeUploadRequest($request);
+            $this->notice = 'Anforderung beendet. Der Upload-Link ist ungültig.';
+        } catch (PortalException $e) {
+            report($e);
+            $this->error = $e->userMessage();
+        }
+    }
+
     /**
      * @param  callable(Shipment): mixed  $action
      */
@@ -166,7 +188,19 @@ class ShareList extends Component
             ? Shipment::find($this->expanded)?->events()->orderByDesc('portal_event_id')->limit(50)->get()
             : null;
 
+        $requests = UploadRequest::query()->withCount('uploads')->latest('id')
+            ->when($this->context !== [], fn ($q) => $q->where('context_key', Shipment::contextKey($this->context)))
+            ->when($this->mine, fn ($q) => $q->where('user_id', auth()->id()))
+            ->when($this->onlyActive, fn ($q) => $q->where('status', 'open')->where('expires_at', '>', now()))
+            ->limit(20)->get();
+
+        $uploads = Upload::query()->latest('id')
+            ->when($this->context !== [], fn ($q) => $q->where('context_key', Shipment::contextKey($this->context)))
+            ->limit(30)->get();
+
         return view('nfshare::livewire.share-list', [
+            'requests' => $requests,
+            'uploads' => $uploads,
             'shipments' => $shipments,
             'events' => $events,
             'recipientsByPortalId' => $this->expanded

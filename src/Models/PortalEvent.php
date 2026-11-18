@@ -24,6 +24,12 @@ class PortalEvent extends Model
         'file.downloaded' => 'Datei heruntergeladen',
         'download.limit_reached' => 'Abruflimit erreicht',
         'account.notified' => 'Kontoinhaber per E-Mail hingewiesen',
+        'upload_request.created' => 'Unterlagen angefordert',
+        'upload_request.opened' => 'Upload-Link geöffnet',
+        'upload_request.closed' => 'Anforderung beendet',
+        'upload.received' => 'Datei hochgeladen',
+        'upload.fetched' => 'Upload abgeholt',
+        'upload.expired' => 'Upload nicht abgeholt, gelöscht',
     ];
 
     protected $table = 'share_events';

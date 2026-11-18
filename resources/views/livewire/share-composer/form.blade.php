@@ -135,15 +135,43 @@
                     placeholder="z. B. Aktenzeichen">
             </div>
         </div>
+
+        {{-- ------------------------------------------------------------ Rückkanal --}}
+        <h6 class="text-body-secondary text-uppercase small mt-4 mb-2">Unterlagen anfordern</h6>
+
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="nfshare-request" wire:model.live="requestUpload">
+            <label class="form-check-label" for="nfshare-request">Empfänger um Unterlagen bitten (persönlicher Upload-Link)</label>
+        </div>
+
+        @if ($requestUpload)
+            <div class="row g-2 mt-1">
+                <div class="col-sm-9">
+                    <label for="nfshare-upload-subject" class="form-label small mb-1">Welche Unterlagen?</label>
+                    <input id="nfshare-upload-subject" type="text" class="form-control @error('uploadSubject') is-invalid @enderror"
+                        wire:model="uploadSubject" maxlength="200" placeholder="z. B. Lohnabrechnungen 2025, unterschriebene Vereinbarung">
+                    @error('uploadSubject')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+                <div class="col-sm-3">
+                    <label for="nfshare-upload-max" class="form-label small mb-1">Höchstens Dateien</label>
+                    <input id="nfshare-upload-max" type="number" class="form-control" wire:model="uploadMaxFiles" min="1" max="20">
+                </div>
+            </div>
+            <div class="form-text">Der Upload-Link gilt bis zur selben Frist. Eingänge erscheinen nach dem nächsten Abgleich
+                {{ class_exists('Nfgarching\Files\Models\File') && config('nfshare.uploads.files', true) ? 'im Posteingang der Dateiverwaltung' : 'in der Übersicht' }}.</div>
+        @endif
     </div>
 
     <div class="modal-footer">
         <span class="me-auto small text-body-secondary">
             {{ count(array_filter($files, fn ($f) => $f['active'])) }} Datei(en) · {{ count($recipients) }} Empfänger
+            @if ($requestUpload) · mit Anforderung @endif
         </span>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
         <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="share">
-            <span wire:loading.remove wire:target="share"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Bereitstellen</span>
+            <span wire:loading.remove wire:target="share"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> {{ count(array_filter($files, fn ($f) => $f['active'])) ? 'Bereitstellen' : 'Anfordern' }}</span>
             <span wire:loading wire:target="share"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Wird übertragen …</span>
         </button>
     </div>

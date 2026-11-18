@@ -46,6 +46,25 @@
                     </div>
                 @endif
 
+            @endif
+
+            @if ($recipient['upload_url'] ?? null)
+                <div class="input-group input-group-sm mt-2">
+                    <span class="input-group-text" title="Upload-Link"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></span>
+                    <input type="text" class="form-control font-monospace" value="{{ $recipient['upload_url'] }}" readonly
+                        aria-label="Upload-Link für {{ $recipient['email'] }}" x-on:focus="$el.select()">
+                    <button type="button" class="btn btn-outline-secondary"
+                        x-on:click="navigator.clipboard.writeText(@js($recipient['upload_url'])); copied = 'up{{ $i }}'; setTimeout(() => copied = null, 2000)">
+                        <i class="bi" :class="copied === 'up{{ $i }}' ? 'bi-check-lg' : 'bi-clipboard'" aria-hidden="true"></i>
+                        <span class="visually-hidden">Upload-Link kopieren</span>
+                    </button>
+                </div>
+                @if ($recipient['upload_password'])
+                    <div class="small mt-1">Passwort für den Upload: <span class="font-monospace fw-semibold user-select-all">{{ $recipient['upload_password'] }}</span></div>
+                @endif
+            @endif
+
+            @if ($recipient['url'] || ($recipient['upload_url'] ?? null))
                 @if ($this->mailerAvailable && $recipient['mail'])
                     <button type="button" class="btn btn-sm btn-primary mt-2"
                         x-on:click="pendingMail = @js($recipient['mail']); bootstrap.Modal.getInstance($root).hide()">
