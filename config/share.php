@@ -111,7 +111,7 @@ return [
     |        nichts preis außer Betreff und Hinweis; daher standardmäßig ohne.
     */
     'uploads' => [
-        'key_path' => env('NFSHARE_KEY_PATH', storage_path('app/nfshare/upload.key')),
+        'key_path' => env('NFSHARE_KEY_PATH', storage_path('app/private/nfshare/upload.key')),
         'disk' => env('NFSHARE_UPLOAD_DISK', 'local'),
         'directory' => env('NFSHARE_UPLOAD_DIRECTORY', 'nfshare/eingang/{Y}/{m}'),
         'quarantine_directory' => 'nfshare/quarantaene',

@@ -187,7 +187,7 @@ php artisan share:keygen        # Schlüsselpaar erzeugen, öffentlichen Schlüs
 php artisan share:check         # zeigt Schlüssel, Ablage und Virenprüfung
 ```
 
-Die Schlüsseldatei (`storage/app/nfshare/upload.key`, Rechte 0600) **in die Datensicherung
+Die Schlüsseldatei (`storage/app/private/nfshare/upload.key`, Rechte 0600) **in die Datensicherung
 aufnehmen**: Ohne sie lassen sich noch nicht abgeholte Uploads nicht mehr öffnen.
 `share:keygen --push` hinterlegt einen vorhandenen Schlüssel erneut (z. B. nach dem
 Umzug des Portals), `--force` ersetzt ihn.
